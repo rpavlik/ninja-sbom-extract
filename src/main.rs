@@ -5,6 +5,7 @@
 // Author: Ryan Pavlik <ryan.pavlik@collabora.com>
 
 use std::{
+    borrow::Borrow,
     collections::HashSet,
     fs, io,
     path::{Path, PathBuf},
@@ -98,7 +99,7 @@ impl SpdxGenerator {
 
         self.graph.add_edge(product, input, ());
     }
-    fn add_deps(&mut self, deps: DepsForOneFile<'_>) {
+    fn add_deps<X: ToOwned<Owned = PathBuf>>(&mut self, deps: DepsForOneFile<X>) {
         let product = self.add_or_get_file_id(deps.output.to_owned(), FileType::GeneratedFile);
         for input in deps.inputs {
             let input = self.add_or_get_file_id(input.to_owned(), FileType::SourceFile);
@@ -132,7 +133,7 @@ impl SpdxGenerationOptions {
         Ok(result)
     }
 
-    fn get_deps(&self) -> Result<Vec<DepsForOneFile>, anyhow::Error> {
+    fn get_deps(&self) -> Result<Vec<DepsForOneFile<PathBuf>>, anyhow::Error> {
         let output = Command::new("ninja")
             .arg("-t")
             .arg("deps")
@@ -142,8 +143,18 @@ impl SpdxGenerationOptions {
 
         let result = recognize_deps(&stdout).map_err(|e| e.to_owned())?.1;
 
-            // .map_err(|e| anyhow::anyhow!("Query parsing error: {}", e.to_string()))?;
-        Ok(result)
+        // .map_err(|e| anyhow::anyhow!("Query parsing error: {}", e.to_string()))?;
+        Ok(result.into_iter().map(|d| d.into_owned()).collect())
+    }
+
+    fn get_inputs(&self, target: &str) -> Result<Vec<String>, anyhow::Error> {
+        let output = Command::new("ninja")
+            .arg("-t")
+            .arg("deps")
+            .current_dir(&self.build_dir)
+            .output()?;
+        let stdout: String = String::from_utf8(output.stdout)?;
+        Ok(stdout.split('\n').map(|s| s.trim().to_owned()).collect())
     }
 }
 
@@ -153,7 +164,7 @@ fn main() -> Result<(), anyhow::Error> {
         let contents = fs::read_to_string("deps.txt")?;
 
         for deps in recognize_deps(&contents).map_err(|e| e.to_owned())?.1 {
-            generator.add_deps(deps);
+            generator.add_deps(deps.into_owned());
         }
     }
 

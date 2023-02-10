@@ -6,7 +6,7 @@
 
 /// Parsing the `ninja -t deps` output
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     path::{Path, PathBuf},
 };
 
@@ -62,38 +62,53 @@ fn recognize_dep<'a>(input: &'a str) -> IResult<&'a str, &'a Path> {
 }
 
 #[derive(Debug, Clone)]
-pub struct DepsForOneFile<'a, X>
-where
-    X: ToOwned<Owned = PathBuf>,
-{
-    pub output: Cow<'a, X>,
-    pub inputs: Vec<Cow<'a, X>>,
+pub struct DepsForOneFile<X> {
+    pub output: X,
+    pub inputs: Vec<X>,
 }
 
-impl<X> DepsForOneFile<'_, X>
-where
-    X: ToOwned<Owned = PathBuf>,
-{
-    pub fn into_owned<'a>(self) -> DepsForOneFile<'a, X> {
-        Self {
-            output: self.output.clone(),
-            inputs: self.inputs.into_iter().cloned().collect(),
+// impl<X> DepsForOneFile<'_, X>
+// where
+//     X: ToOwned<Owned = PathBuf>,
+// {
+//     pub fn into_owned<'a>(self) -> DepsForOneFile<'a, X> {
+//         Self {
+//             output: self.output.clone(),
+//             inputs: self.inputs.into_iter().cloned().collect(),
+//         }
+//     }
+// }
+
+// impl<X> DepsForOneFile<X>
+// where
+//     X: ToOwned,
+// {
+//     pub fn into_owned(self) -> DepsForOneFile<X::Owned> {
+//         DepsForOneFile {
+//             output: self.output.to_owned(),
+//             inputs: self.inputs.into_iter().map(|e| e.to_owned()).collect(),
+//         }
+//     }
+// }
+
+impl DepsForOneFile<&Path> {
+    pub fn into_owned(self) -> DepsForOneFile<PathBuf> {
+        DepsForOneFile {
+            output: self.output.to_owned(),
+            inputs: self.inputs.into_iter().map(|e| e.to_owned()).collect(),
         }
     }
 }
 
-fn recognize_deps_for_one_file<'a>(input: &'a str) -> IResult<&'a str, DepsForOneFile<'a>> {
+fn recognize_deps_for_one_file<'a>(input: &'a str) -> IResult<&'a str, DepsForOneFile<&'a Path>> {
     let output_line = terminated(recognize_output_line, line_ending);
     let deps = many0(terminated(recognize_dep, line_ending));
     pair(output_line, deps)
-        .map(|(output, inputs)| DepsForOneFile {
-            output: Cow::Borrowed(output),
-            inputs: inputs.into_iter().map(|p| Cow::Borrowed(p)).collect(),
-        })
+        .map(|(output, inputs)| DepsForOneFile { output, inputs })
         .parse(input)
 }
 
-pub fn recognize_deps<'a>(input: &'a str) -> IResult<&'a str, Vec<DepsForOneFile<'a>>> {
+pub fn recognize_deps<'a>(input: &'a str) -> IResult<&'a str, Vec<DepsForOneFile<&'a Path>>> {
     separated_list0(line_ending, recognize_deps_for_one_file).parse(input)
 }
 
