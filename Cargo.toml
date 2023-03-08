@@ -1,7 +1,11 @@
+# SPDX-FileCopyrightText: 2022-2023, Collabora, Ltd.
+# SPDX-License-Identifier: CC0-1.0
+
 [package]
 name = "ninja-sbom-extract"
 version = "0.1.0"
 edition = "2021"
+license = "BSL-1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
